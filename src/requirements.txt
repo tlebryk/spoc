@@ -1,0 +1,8 @@
+torch
+trl
+pandas
+numpy
+sacrebleu
+transformers
+tqdm
+azure-storage-blob

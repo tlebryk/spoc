@@ -21,6 +21,8 @@ from data_loader import SPOCDataLoader
 from inference import CodeGenerator
 from evaluator import CodeEvaluator
 
+from azure_storage import AzureStorage
+
 
 def parse_args():
     """Parse command line arguments."""
@@ -115,8 +117,18 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Timestamp for output files
+    # Timestamp and model name for files
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_short = args.model.split("/")[-1]
+
+    # Azure storage (optional)
+    try:
+        azure = AzureStorage(container="spoc")
+        print(f"✓ Connected to Azure storage")
+    except:
+        azure = None
+        print("⚠ Azure not configured (local only)")
+    print()
 
     # %%
     # Load data
@@ -169,9 +181,15 @@ def main():
             top_p=0.95
         )
 
-        # Save generation results
-        gen_output_file = output_dir / f"generations_{timestamp}.json"
+        # Save generation results locally and to Azure
+        gen_file = f"generations_{model_short}_{args.split}_n{args.n_samples}_{timestamp}.json"
+        gen_output_file = output_dir / gen_file
         generator.save_results(results, gen_output_file)
+
+        if azure:
+            azure_path = f"generations/{model_short}/{args.split}/{gen_file}"
+            azure.save_file(str(gen_output_file), azure_path)
+            print(f"✓ Uploaded to Azure: {azure_path}")
         print()
 
     # %%
@@ -203,7 +221,8 @@ def main():
 
     # %%
     # Save full results
-    eval_output_file = output_dir / f"evaluation_{timestamp}.json"
+    eval_file = f"evaluation_{model_short}_{args.split}_n{args.n_samples}_{timestamp}.json"
+    eval_output_file = output_dir / eval_file
 
     full_results = {
         "config": {
@@ -213,6 +232,7 @@ def main():
             "temperature": args.temperature,
             "max_tokens": args.max_tokens,
             "use_hidden_tests": not args.use_public_tests,
+            "timestamp": timestamp,
         },
         "metrics": {
             **metrics,
@@ -223,12 +243,17 @@ def main():
 
     with open(eval_output_file, 'w') as f:
         json.dump(full_results, f, indent=2)
+    print(f"✓ Saved locally: {eval_output_file}")
 
-    print(f"✓ Full results saved to {eval_output_file}")
+    if azure:
+        azure_path = f"evaluations/{model_short}/{args.split}/{eval_file}"
+        azure.save_file(str(eval_output_file), azure_path)
+        print(f"✓ Uploaded to Azure: {azure_path}")
     print()
 
     # Save metrics summary
-    summary_file = output_dir / f"metrics_summary_{timestamp}.txt"
+    metrics_file = f"metrics_{model_short}_{args.split}_n{args.n_samples}_{timestamp}.txt"
+    summary_file = output_dir / metrics_file
     with open(summary_file, 'w') as f:
         f.write(f"SPOC Evaluation Summary\n")
         f.write(f"{'=' * 80}\n\n")
@@ -241,7 +266,12 @@ def main():
         f.write(f"FCorrAcc: {metrics['fcorr_acc']:.2f}%\n")
         f.write(f"Pass@1: {metrics['pass_at_1']:.2f}%\n")
 
-    print(f"✓ Metrics summary saved to {summary_file}")
+    print(f"✓ Saved locally: {summary_file}")
+
+    if azure:
+        azure_path = f"metrics/{model_short}/{args.split}/{metrics_file}"
+        azure.save_file(str(summary_file), azure_path)
+        print(f"✓ Uploaded to Azure: {azure_path}")
     print()
     print("=" * 80)
     print("Evaluation complete!")
