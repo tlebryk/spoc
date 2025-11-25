@@ -95,6 +95,12 @@ def parse_args():
         help="Path to existing results file (for --skip-inference)"
     )
 
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        help="Run name for consistent naming across Colab/local (uses timestamp if not provided)"
+    )
+
     return parser.parse_args()
 
 
@@ -117,8 +123,8 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Timestamp and model name for files
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Run identifier: use run-name if provided, otherwise timestamp
+    run_id = args.run_name if args.run_name else datetime.now().strftime("%Y%m%d_%H%M%S")
     model_short = args.model.split("/")[-1]
 
     # Azure storage (optional)
@@ -128,6 +134,9 @@ def main():
     except:
         azure = None
         print("⚠ Azure not configured (local only)")
+
+    if args.run_name:
+        print(f"Run name: {args.run_name}")
     print()
 
     # %%
@@ -153,9 +162,19 @@ def main():
         print("Loading existing results...")
         print("-" * 80)
 
+        # If no results file specified, try to load from Azure using run-name
         if not args.results_file:
-            print("Error: --results-file required when using --skip-inference")
-            return
+            if azure and args.run_name:
+                gen_file = f"generations_{model_short}_{args.split}_n{args.n_samples}_{run_id}.json"
+                azure_path = f"generations/{model_short}/{args.split}/{gen_file}"
+                local_path = output_dir / gen_file
+
+                print(f"Downloading from Azure: {azure_path}")
+                azure.load_file(azure_path, str(local_path))
+                args.results_file = str(local_path)
+            else:
+                print("Error: --results-file required when using --skip-inference (or use --run-name with Azure)")
+                return
 
         with open(args.results_file, 'r') as f:
             results = json.load(f)
@@ -182,7 +201,7 @@ def main():
         )
 
         # Save generation results locally and to Azure
-        gen_file = f"generations_{model_short}_{args.split}_n{args.n_samples}_{timestamp}.json"
+        gen_file = f"generations_{model_short}_{args.split}_n{args.n_samples}_{run_id}.json"
         gen_output_file = output_dir / gen_file
         generator.save_results(results, gen_output_file)
 
@@ -221,7 +240,7 @@ def main():
 
     # %%
     # Save full results
-    eval_file = f"evaluation_{model_short}_{args.split}_n{args.n_samples}_{timestamp}.json"
+    eval_file = f"evaluation_{model_short}_{args.split}_n{args.n_samples}_{run_id}.json"
     eval_output_file = output_dir / eval_file
 
     full_results = {
@@ -232,7 +251,7 @@ def main():
             "temperature": args.temperature,
             "max_tokens": args.max_tokens,
             "use_hidden_tests": not args.use_public_tests,
-            "timestamp": timestamp,
+            "run_id": run_id,
         },
         "metrics": {
             **metrics,
@@ -252,7 +271,7 @@ def main():
     print()
 
     # Save metrics summary
-    metrics_file = f"metrics_{model_short}_{args.split}_n{args.n_samples}_{timestamp}.txt"
+    metrics_file = f"metrics_{model_short}_{args.split}_n{args.n_samples}_{run_id}.txt"
     summary_file = output_dir / metrics_file
     with open(summary_file, 'w') as f:
         f.write(f"SPOC Evaluation Summary\n")
