@@ -17,6 +17,17 @@ python run_eval.py --n-samples 50  # Generates code + evaluates
 3. Download `outputs/generations_colab.json`
 4. Locally: `python run_eval.py --skip-inference --results-file generations_colab.json`
 
+**Modal (GPU) → Local (CPU):**
+```bash
+# Setup (once): pip install modal && modal setup
+# Upload data (once): modal run modal_app/upload_data.py
+modal run modal_app/inference.py --n-samples 50
+
+# Evaluate (from scripts directory)
+cd scripts
+python run_eval.py --skip-inference --results-file ../outputs/generations_*.json
+```
+
 ## What This Does
 
 Evaluates LLM code generation on SPOC dataset:
@@ -48,6 +59,10 @@ src/
 scripts/
   eda.py           # Quick dataset preview
   run_eval.py      # Main evaluation script
+
+modal_app/         # Modal GPU inference
+  inference.py     # Main inference on Modal
+  upload_data.py   # Upload datasets to Modal volume
 
 outputs/          # Results saved here
 ```
@@ -113,7 +128,7 @@ Use `--split` to choose which one.
 --use-public-tests           # Use public test cases (default: hidden)
 --load-in-8bit               # 8-bit quantization for less memory
 --skip-inference             # Skip generation, just re-evaluate
---results-file path.json     # Use with --skip-inference
+--results-file path.json     # Use with --skip-inference (supports glob patterns, e.g., ../outputs/generations_*.json)
 ```
 
 ## Quick Debugging

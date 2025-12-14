@@ -14,6 +14,13 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+# Load .env if it exists (local only, not needed in Colab)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / ".env")
+except Exception as e:
+    print("No .env file found")
+
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -21,7 +28,7 @@ from data_loader import SPOCDataLoader
 from inference import CodeGenerator
 from evaluator import CodeEvaluator
 
-from azure_storage import AzureStorage
+# from azure_storage import AzureStorage  # Disabled by default - use Modal volumes or local storage
 
 
 def parse_args():
@@ -127,13 +134,14 @@ def main():
     run_id = args.run_name if args.run_name else datetime.now().strftime("%Y%m%d_%H%M%S")
     model_short = args.model.split("/")[-1]
 
-    # Azure storage (optional)
-    try:
-        azure = AzureStorage(container="spoc")
-        print(f"✓ Connected to Azure storage")
-    except:
-        azure = None
-        print("⚠ Azure not configured (local only)")
+    # Azure storage (disabled by default - use Modal volumes or local storage)
+    # try:
+    #     azure = AzureStorage(container="spoc")
+    #     print(f"✓ Connected to Azure storage")
+    # except:
+    #     azure = None
+    #     print("⚠ Azure not configured (local only)")
+    azure = None
 
     if args.run_name:
         print(f"Run name: {args.run_name}")
@@ -162,19 +170,19 @@ def main():
         print("Loading existing results...")
         print("-" * 80)
 
-        # If no results file specified, try to load from Azure using run-name
+        # If no results file specified, error
         if not args.results_file:
-            if azure and args.run_name:
-                gen_file = f"generations_{model_short}_{args.split}_n{args.n_samples}_{run_id}.json"
-                azure_path = f"generations/{model_short}/{args.split}/{gen_file}"
-                local_path = output_dir / gen_file
-
-                print(f"Downloading from Azure: {azure_path}")
-                azure.load_file(azure_path, str(local_path))
-                args.results_file = str(local_path)
-            else:
-                print("Error: --results-file required when using --skip-inference (or use --run-name with Azure)")
-                return
+            # if azure and args.run_name:
+            #     gen_file = f"generations_{model_short}_{args.split}_n{args.n_samples}_{run_id}.json"
+            #     azure_path = f"generations/{model_short}/{args.split}/{gen_file}"
+            #     local_path = output_dir / gen_file
+            #
+            #     print(f"Downloading from Azure: {azure_path}")
+            #     azure.load_file(azure_path, str(local_path))
+            #     args.results_file = str(local_path)
+            # else:
+            print("Error: --results-file required when using --skip-inference")
+            return
 
         with open(args.results_file, 'r') as f:
             results = json.load(f)
@@ -200,15 +208,15 @@ def main():
             top_p=0.95
         )
 
-        # Save generation results locally and to Azure
+        # Save generation results locally
         gen_file = f"generations_{model_short}_{args.split}_n{args.n_samples}_{run_id}.json"
         gen_output_file = output_dir / gen_file
         generator.save_results(results, gen_output_file)
 
-        if azure:
-            azure_path = f"generations/{model_short}/{args.split}/{gen_file}"
-            azure.save_file(str(gen_output_file), azure_path)
-            print(f"✓ Uploaded to Azure: {azure_path}")
+        # if azure:
+        #     azure_path = f"generations/{model_short}/{args.split}/{gen_file}"
+        #     azure.save_file(str(gen_output_file), azure_path)
+        #     print(f"✓ Uploaded to Azure: {azure_path}")
         print()
 
     # %%
@@ -264,10 +272,10 @@ def main():
         json.dump(full_results, f, indent=2)
     print(f"✓ Saved locally: {eval_output_file}")
 
-    if azure:
-        azure_path = f"evaluations/{model_short}/{args.split}/{eval_file}"
-        azure.save_file(str(eval_output_file), azure_path)
-        print(f"✓ Uploaded to Azure: {azure_path}")
+    # if azure:
+    #     azure_path = f"evaluations/{model_short}/{args.split}/{eval_file}"
+    #     azure.save_file(str(eval_output_file), azure_path)
+    #     print(f"✓ Uploaded to Azure: {azure_path}")
     print()
 
     # Save metrics summary
@@ -287,10 +295,10 @@ def main():
 
     print(f"✓ Saved locally: {summary_file}")
 
-    if azure:
-        azure_path = f"metrics/{model_short}/{args.split}/{metrics_file}"
-        azure.save_file(str(summary_file), azure_path)
-        print(f"✓ Uploaded to Azure: {azure_path}")
+    # if azure:
+    #     azure_path = f"metrics/{model_short}/{args.split}/{metrics_file}"
+    #     azure.save_file(str(summary_file), azure_path)
+    #     print(f"✓ Uploaded to Azure: {azure_path}")
     print()
     print("=" * 80)
     print("Evaluation complete!")

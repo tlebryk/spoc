@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any, Union
 try:
     from azure.storage.blob import BlobServiceClient
     AZURE_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     AZURE_AVAILABLE = False
 
 

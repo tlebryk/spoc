@@ -1,0 +1,5 @@
+# Modal CLI
+modal>=0.63.0
+
+# For local data processing before upload
+pandas>=2.1.0
